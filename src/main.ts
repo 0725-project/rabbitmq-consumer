@@ -1,18 +1,14 @@
 import { NestFactory } from '@nestjs/core'
 import { AppModule } from './app.module'
-import { setupSwagger } from './common/utils/setupSwagger'
 import { Logger, ValidationPipe } from '@nestjs/common'
-import { TransformInterceptor } from './common/interceptors/transform.interceptor'
-import { TypeOrmExceptionFilter } from './common/filters/typeorm-exception.filter'
-import * as cookieParser from 'cookie-parser'
 import { Transport } from '@nestjs/microservices'
 
-const PORT = process.env.PORT ?? 3000
+const PORT = process.env.PORT ?? 3001
 const IS_PRODUCTION = process.env.NODE_ENV === 'production'
 
 const bootstrap = async () => {
     const app = await NestFactory.create(AppModule)
-    app.setGlobalPrefix('api')
+    app.setGlobalPrefix('rmq')
     app.useGlobalPipes(
         new ValidationPipe({
             whitelist: true,
@@ -20,22 +16,11 @@ const bootstrap = async () => {
             forbidNonWhitelisted: true,
         }),
     )
-    app.useGlobalInterceptors(new TransformInterceptor())
-    app.useGlobalFilters(new TypeOrmExceptionFilter())
-    app.use(cookieParser())
 
     app.enableCors({
         origin: IS_PRODUCTION ? process.env.FRONTEND_URL : 'http://localhost:4000',
         credentials: true,
     })
-
-    const logger = new Logger('Bootstrap')
-
-    if (!IS_PRODUCTION) {
-        setupSwagger(app)
-    }
-
-    await app.listen(PORT)
 
     const searchIndexer = await NestFactory.createMicroservice(AppModule, {
         transport: Transport.RMQ,
@@ -61,11 +46,10 @@ const bootstrap = async () => {
     })
     notificationService.listen()
 
-    logger.log(`Application is running on: ${await app.getUrl()}`)
+    await app.listen(PORT)
 
-    if (!IS_PRODUCTION) {
-        logger.log(`Swagger is available at: ${await app.getUrl()}/api-docs`)
-    }
+    const logger = new Logger('Bootstrap')
+    logger.log(`RabbitMQ Consumer Application is running on: ${await app.getUrl()}`)
 }
 
 bootstrap()
